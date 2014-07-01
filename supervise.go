@@ -32,7 +32,7 @@ func marshal(obj interface{}) []byte {
 func supervise(client *docker.Client, config *ConfigStore) {
 	events := make(chan *docker.APIEvents)
 	if err := client.AddEventListener(events); err != nil {
-		log.Fatalln("[fatal] failed to subscribe to docker events")
+		log.Fatal("failed to subscribe to docker events:", err)
 	}
 	for event := range events {
 		if event.Status == "die" {
@@ -69,7 +69,7 @@ func supervise(client *docker.Client, config *ConfigStore) {
 			}
 		}
 	}
-	log.Fatalln("[fatal] supervisor loop closed unexpectedly")
+	log.Fatal("supervisor loop closed unexpectedly")
 }
 
 func main() {
@@ -79,7 +79,7 @@ func main() {
 
 	client, err := docker.NewClient(endpoint)
 	if err != nil {
-		log.Fatalf("[fatal] failed to connect to docker: %s\n", err)
+		log.Fatal("unable to connect docker:", err)
 	}
 
 	var persister Persister
