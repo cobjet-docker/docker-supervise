@@ -73,6 +73,7 @@ func supervise(client *docker.Client, config *ConfigStore) {
 }
 
 func main() {
+	persistDir := envopt("PERSIST", PERSIST_DIR)
 	endpoint := envopt("DOCKER_HOST", "unix:///var/run/docker.sock")
 	port := envopt("PORT", "8080")
 
@@ -80,8 +81,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("[fatal] failed to connect to docker: %s\n", err)
 	}
-
-	persistDir := envopt("PERSIST", PERSIST_DIR)
 
 	var persister Persister = nil
 
