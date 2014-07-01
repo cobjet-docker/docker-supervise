@@ -14,11 +14,6 @@ const (
 	PERSIST_DIR = "containers"
 )
 
-var (
-	confStore *ConfigStore
-	client    *docker.Client
-)
-
 func envopt(name, def string) string {
 	if env := os.Getenv(name); env != "" {
 		return env
@@ -34,8 +29,12 @@ func marshal(obj interface{}) []byte {
 	return bytes
 }
 
-func supervise(c chan *docker.APIEvents) {
-	for event := range c {
+func supervise(client *docker.Client, config *ConfigStore) {
+	events := make(chan *docker.APIEvents)
+	if err := client.AddEventListener(events); err != nil {
+		log.Fatalln("[fatal] failed to subscribe to docker events")
+	}
+	for event := range events {
 		if event.Status == "die" {
 			container, err := client.InspectContainer(event.ID)
 			if err != nil {
@@ -45,7 +44,7 @@ func supervise(c chan *docker.APIEvents) {
 
 			name := container.Name[1:]
 
-			conf, ok := confStore.Get(name)
+			conf, ok := config.Get(name)
 			if !ok {
 				continue
 			}
@@ -77,8 +76,7 @@ func main() {
 	endpoint := envopt("DOCKER_HOST", "unix:///var/run/docker.sock")
 	port := envopt("PORT", "8080")
 
-	var err error
-	client, err = docker.NewClient(endpoint)
+	client, err := docker.NewClient(endpoint)
 	if err != nil {
 		log.Fatalf("[fatal] failed to connect to docker: %s\n", err)
 	}
@@ -93,23 +91,13 @@ func main() {
 		persister = DirectoryPersister(persistDir)
 	}
 
-	confStore = NewConfigStore(persister)
+	confStore := NewConfigStore(persister)
 	err = confStore.Load()
 	if err != nil {
 		log.Printf("[warn] failed to load from persist dir: %v", err)
 	}
 
-	events := make(chan *docker.APIEvents)
-
-	// go-dockerclient issue #101
-	client.AddEventListener(events)
-	client.RemoveEventListener(events)
-	err = client.AddEventListener(events)
-	if err != nil {
-		log.Fatalf("[fatal] failed to add event listener: %s\n", err)
-	}
-
-	go supervise(events)
+	go supervise(client, confStore)
 
 	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
 		path := strings.Trim(r.URL.Path, "/")
