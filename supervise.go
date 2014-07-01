@@ -34,6 +34,45 @@ func marshal(obj interface{}) []byte {
 	return bytes
 }
 
+func supervise(c chan *docker.APIEvents) {
+	for event := range c {
+		if event.Status == "die" {
+			container, err := client.InspectContainer(event.ID)
+			if err != nil {
+				log.Println("supervisor: container destroyed too quickly, skipping", event.ID)
+				continue
+			}
+
+			name := container.Name[1:]
+
+			conf, ok := confStore.Get(name)
+			if !ok {
+				continue
+			}
+
+			hostConfig := container.HostConfig
+
+			if err := client.RemoveContainer(docker.RemoveContainerOptions{ID: container.ID}); err != nil {
+				log.Println("supervisor: unable to remove container:", err)
+			}
+
+			newContainer, err := client.CreateContainer(docker.CreateContainerOptions{
+				Name:   name,
+				Config: conf,
+			})
+			if err != nil {
+				log.Println("supervisor: unable to create container:", err)
+				continue
+			}
+
+			if err := client.StartContainer(newContainer.ID, hostConfig); err != nil {
+				log.Println("supervisor: unable to start container:", err)
+			}
+		}
+	}
+	log.Fatalln("[fatal] supervisor loop closed unexpectedly")
+}
+
 func main() {
 	endpoint := envopt("DOCKER_HOST", "unix:///var/run/docker.sock")
 	port := envopt("PORT", "8080")
@@ -70,7 +109,7 @@ func main() {
 		log.Fatalf("[fatal] failed to add event listener: %s\n", err)
 	}
 
-	go monitorEvents(events)
+	go supervise(events)
 
 	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
 		path := strings.Trim(r.URL.Path, "/")
@@ -132,43 +171,4 @@ func main() {
 		}
 	})
 	log.Fatal(http.ListenAndServe(":"+port, nil))
-}
-
-func monitorEvents(c chan *docker.APIEvents) {
-	for event := range c {
-		if event.Status == "die" {
-			container, err := client.InspectContainer(event.ID)
-			if err != nil {
-				log.Println("monitor: container destroyed too quickly, skipping", event.ID)
-				continue
-			}
-
-			name := container.Name[1:]
-
-			conf, ok := confStore.Get(name)
-			if !ok {
-				continue
-			}
-
-			hostConfig := container.HostConfig
-
-			if err := client.RemoveContainer(docker.RemoveContainerOptions{ID: container.ID}); err != nil {
-				log.Println("monitor: unable to remove container:", err)
-			}
-
-			newContainer, err := client.CreateContainer(docker.CreateContainerOptions{
-				Name:   name,
-				Config: conf,
-			})
-			if err != nil {
-				log.Println("monitor: unable to create container:", err)
-				continue
-			}
-
-			if err := client.StartContainer(newContainer.ID, hostConfig); err != nil {
-				log.Println("monitor: unable to start container:", err)
-			}
-		}
-	}
-	log.Fatalln("[fatal] monitor loop closed unexpectedly")
 }
