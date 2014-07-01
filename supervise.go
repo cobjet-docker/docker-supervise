@@ -85,19 +85,19 @@ func serveHandler(rw http.ResponseWriter, r *http.Request) {
 			bte, err := json.MarshalIndent(list, "", "  ")
 			if err != nil {
 				log.Printf("[err] trying to marshal set: %s\n", err)
-				http.Error(rw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				http.Error(rw, "Internal error", http.StatusInternalServerError)
 				return
 			}
 			fmt.Fprintf(rw, "%s", bte)
 		case "POST":
 			if err := r.ParseForm(); err != nil {
-				http.Error(rw, "can't parse request form: "+err.Error(), http.StatusBadRequest)
+				http.Error(rw, err.Error(), http.StatusBadRequest)
 				return
 			}
 
 			name := strings.Trim(r.Form.Get("id"), "/")
 			if name == "" {
-				http.Error(rw, "requires id parameter for monitoring container", http.StatusBadRequest)
+				http.Error(rw, "Bad request", http.StatusBadRequest)
 				return
 			}
 
@@ -109,7 +109,7 @@ func serveHandler(rw http.ResponseWriter, r *http.Request) {
 
 			container, err := client.InspectContainer(name)
 			if err != nil {
-				http.Error(rw, "can't monitor container: "+err.Error(), http.StatusBadRequest)
+				http.Error(rw, err.Error(), http.StatusBadRequest)
 				return
 			}
 
@@ -118,12 +118,12 @@ func serveHandler(rw http.ResponseWriter, r *http.Request) {
 			rw.Header().Set("Location", "/"+name)
 			rw.WriteHeader(http.StatusCreated)
 		default:
-			http.Error(rw, "Invalid Method "+r.Method, http.StatusBadRequest)
+			http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	} else {
 		conf, ok := confStore.Get(path)
 		if !ok {
-			http.Error(rw, "not monitoring "+path, http.StatusNotFound)
+			http.Error(rw, "Not found", http.StatusNotFound)
 			return
 		}
 
@@ -133,10 +133,8 @@ func serveHandler(rw http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(rw, "%s", bte)
 		case "DELETE":
 			confStore.Remove(path)
-			fmt.Fprintf(rw, "okay, deleted %s.", path)
-			rw.WriteHeader(http.StatusOK)
 		default:
-			http.Error(rw, "Invalid Method "+r.Method, http.StatusBadRequest)
+			http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}
 }
