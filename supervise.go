@@ -107,11 +107,13 @@ func serveHandler(rw http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			err := monitorContainer(name)
+			container, err := client.InspectContainer(name)
 			if err != nil {
 				http.Error(rw, "can't monitor container: "+err.Error(), http.StatusBadRequest)
 				return
 			}
+
+			confStore.Add(strings.Trim(container.Name, "/"), container.Config)
 
 			rw.Header().Set("Location", "/"+name)
 			rw.WriteHeader(http.StatusCreated)
@@ -137,17 +139,6 @@ func serveHandler(rw http.ResponseWriter, r *http.Request) {
 			http.Error(rw, "Invalid Method "+r.Method, http.StatusBadRequest)
 		}
 	}
-}
-
-func monitorContainer(name string) error {
-	// verify ID
-	container, err := client.InspectContainer(name)
-	if err != nil {
-		return err
-	}
-
-	confStore.Add(strings.Trim(container.Name, "/"), container.Config)
-	return nil
 }
 
 func monitorEvents(c chan *docker.APIEvents) {
