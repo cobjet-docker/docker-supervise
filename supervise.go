@@ -10,10 +10,6 @@ import (
 	"github.com/fsouza/go-dockerclient"
 )
 
-const (
-	PERSIST_DIR = "containers"
-)
-
 func envopt(name, def string) string {
 	if env := os.Getenv(name); env != "" {
 		return env
@@ -73,7 +69,7 @@ func supervise(client *docker.Client, config *ConfigStore) {
 }
 
 func main() {
-	persistDir := envopt("PERSIST", PERSIST_DIR)
+	persistDir := envopt("PERSIST", "./containers")
 	endpoint := envopt("DOCKER_HOST", "unix:///var/run/docker.sock")
 	port := envopt("PORT", "8080")
 
