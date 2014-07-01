@@ -89,13 +89,12 @@ func main() {
 		persister = DirectoryPersister(persistDir)
 	}
 
-	confStore := NewConfigStore(persister)
-	err = confStore.Load()
-	if err != nil {
+	config := NewConfigStore(persister)
+	if err := config.Load(); err != nil {
 		log.Printf("[warn] failed to load from persist dir: %v", err)
 	}
 
-	go supervise(client, confStore)
+	go supervise(client, config)
 
 	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
 		path := strings.Trim(r.URL.Path, "/")
@@ -104,7 +103,7 @@ func main() {
 			switch r.Method {
 			case "GET":
 				list := make([]string, 0)
-				for k, _ := range confStore.Copy() {
+				for k, _ := range config.Copy() {
 					list = append(list, k)
 				}
 				rw.Write(marshal(list))
@@ -120,7 +119,7 @@ func main() {
 					return
 				}
 
-				if _, ok := confStore.Get(name); ok {
+				if _, ok := config.Get(name); ok {
 					rw.Header().Set("Location", "/"+name)
 					rw.WriteHeader(http.StatusSeeOther)
 					return
@@ -132,7 +131,7 @@ func main() {
 					return
 				}
 
-				confStore.Add(strings.Trim(container.Name, "/"), container.Config)
+				config.Add(container.Name[1:], container.Config)
 
 				rw.Header().Set("Location", "/"+name)
 				rw.WriteHeader(http.StatusCreated)
@@ -140,7 +139,7 @@ func main() {
 				http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
 			}
 		} else {
-			conf, ok := confStore.Get(path)
+			conf, ok := config.Get(path)
 			if !ok {
 				http.Error(rw, "Not found", http.StatusNotFound)
 				return
@@ -150,7 +149,7 @@ func main() {
 			case "GET":
 				rw.Write(marshal(conf))
 			case "DELETE":
-				confStore.Remove(path)
+				config.Remove(path)
 			default:
 				http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
 			}
