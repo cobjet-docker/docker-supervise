@@ -142,9 +142,8 @@ func monitorEvents(c chan *docker.APIEvents) {
 	for event := range c {
 		if event.Status == "die" {
 			container, err := client.InspectContainer(event.ID)
-
 			if err != nil {
-				log.Printf("[wut] container disappeared?! %s\n", err)
+				log.Println("monitor: container destroyed too quickly, skipping", event.ID)
 				continue
 			}
 
@@ -152,38 +151,28 @@ func monitorEvents(c chan *docker.APIEvents) {
 
 			conf, ok := confStore.Get(name)
 			if !ok {
-				// we're not monitoring this name
 				continue
 			}
 
 			hostConfig := container.HostConfig
 
-			// delete old container
-			err = client.RemoveContainer(docker.RemoveContainerOptions{
-				ID: container.ID,
-			})
-
-			if err != nil {
-				log.Printf("[err] failed to delete old container: %s", err)
-				return
+			if err := client.RemoveContainer(docker.RemoveContainerOptions{ID: container.ID}); err != nil {
+				log.Println("monitor: unable to remove container:", err)
 			}
 
 			newContainer, err := client.CreateContainer(docker.CreateContainerOptions{
 				Name:   name,
 				Config: conf,
 			})
-
 			if err != nil {
-				log.Printf("[err] failed to create replacement container... %s\n", err)
-				return
+				log.Println("monitor: unable to create container:", err)
+				continue
 			}
 
-			err = client.StartContainer(newContainer.ID, hostConfig)
-			if err != nil {
-				log.Printf("[err] failed to up replacement container... %s\n", err)
-				return
+			if err := client.StartContainer(newContainer.ID, hostConfig); err != nil {
+				log.Println("monitor: unable to start container:", err)
 			}
 		}
 	}
-	log.Fatalln("[fatal] docker event loop closed unexpectedly")
+	log.Fatalln("[fatal] monitor loop closed unexpectedly")
 }
