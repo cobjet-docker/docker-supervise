@@ -82,8 +82,7 @@ func main() {
 		log.Fatalf("[fatal] failed to connect to docker: %s\n", err)
 	}
 
-	var persister Persister = nil
-
+	var persister Persister
 	if _, err := os.Stat(persistDir); os.IsNotExist(err) {
 		log.Printf("[warn] persist dir doesn't exist, not going to persist.")
 	} else {
