@@ -72,70 +72,66 @@ func main() {
 
 	go monitorEvents(events)
 
-	http.DefaultServeMux.HandleFunc("/", serveHandler)
+	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
+		path := strings.Trim(r.URL.Path, "/")
 
-	log.Fatal(http.ListenAndServe(":"+port, nil))
-}
+		if path == "" {
+			switch r.Method {
+			case "GET":
+				list := make([]string, 0)
+				for k, _ := range confStore.Copy() {
+					list = append(list, k)
+				}
+				rw.Write(marshal(list))
+			case "POST":
+				if err := r.ParseForm(); err != nil {
+					http.Error(rw, err.Error(), http.StatusBadRequest)
+					return
+				}
 
-func serveHandler(rw http.ResponseWriter, r *http.Request) {
-	// remove surrounding /
-	path := strings.Trim(r.URL.Path, "/")
+				name := strings.Trim(r.Form.Get("id"), "/")
+				if name == "" {
+					http.Error(rw, "Bad request", http.StatusBadRequest)
+					return
+				}
 
-	if path == "" {
-		switch r.Method {
-		case "GET":
-			list := make([]string, 0)
-			for k, _ := range confStore.Copy() {
-				list = append(list, k)
-			}
-			rw.Write(marshal(list))
-		case "POST":
-			if err := r.ParseForm(); err != nil {
-				http.Error(rw, err.Error(), http.StatusBadRequest)
-				return
-			}
+				if _, ok := confStore.Get(name); ok {
+					rw.Header().Set("Location", "/"+name)
+					rw.WriteHeader(http.StatusSeeOther)
+					return
+				}
 
-			name := strings.Trim(r.Form.Get("id"), "/")
-			if name == "" {
-				http.Error(rw, "Bad request", http.StatusBadRequest)
-				return
-			}
+				container, err := client.InspectContainer(name)
+				if err != nil {
+					http.Error(rw, err.Error(), http.StatusBadRequest)
+					return
+				}
 
-			if _, ok := confStore.Get(name); ok {
+				confStore.Add(strings.Trim(container.Name, "/"), container.Config)
+
 				rw.Header().Set("Location", "/"+name)
-				rw.WriteHeader(http.StatusSeeOther)
+				rw.WriteHeader(http.StatusCreated)
+			default:
+				http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		} else {
+			conf, ok := confStore.Get(path)
+			if !ok {
+				http.Error(rw, "Not found", http.StatusNotFound)
 				return
 			}
 
-			container, err := client.InspectContainer(name)
-			if err != nil {
-				http.Error(rw, err.Error(), http.StatusBadRequest)
-				return
+			switch r.Method {
+			case "GET":
+				rw.Write(marshal(conf))
+			case "DELETE":
+				confStore.Remove(path)
+			default:
+				http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
 			}
-
-			confStore.Add(strings.Trim(container.Name, "/"), container.Config)
-
-			rw.Header().Set("Location", "/"+name)
-			rw.WriteHeader(http.StatusCreated)
-		default:
-			http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	} else {
-		conf, ok := confStore.Get(path)
-		if !ok {
-			http.Error(rw, "Not found", http.StatusNotFound)
-			return
-		}
-
-		switch r.Method {
-		case "GET":
-			rw.Write(marshal(conf))
-		case "DELETE":
-			confStore.Remove(path)
-		default:
-			http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}
+	})
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func monitorEvents(c chan *docker.APIEvents) {
