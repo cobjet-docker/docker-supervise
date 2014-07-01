@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -25,6 +24,14 @@ func envopt(name, def string) string {
 		return env
 	}
 	return def
+}
+
+func marshal(obj interface{}) []byte {
+	bytes, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		log.Println("marshal:", err)
+	}
+	return bytes
 }
 
 func main() {
@@ -81,14 +88,7 @@ func serveHandler(rw http.ResponseWriter, r *http.Request) {
 			for k, _ := range confStore.Copy() {
 				list = append(list, k)
 			}
-
-			bte, err := json.MarshalIndent(list, "", "  ")
-			if err != nil {
-				log.Printf("[err] trying to marshal set: %s\n", err)
-				http.Error(rw, "Internal error", http.StatusInternalServerError)
-				return
-			}
-			fmt.Fprintf(rw, "%s", bte)
+			rw.Write(marshal(list))
 		case "POST":
 			if err := r.ParseForm(); err != nil {
 				http.Error(rw, err.Error(), http.StatusBadRequest)
@@ -129,8 +129,7 @@ func serveHandler(rw http.ResponseWriter, r *http.Request) {
 
 		switch r.Method {
 		case "GET":
-			bte, _ := json.MarshalIndent(conf, "", "  ")
-			fmt.Fprintf(rw, "%s", bte)
+			rw.Write(marshal(conf))
 		case "DELETE":
 			confStore.Remove(path)
 		default:
