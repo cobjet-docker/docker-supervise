@@ -13,12 +13,10 @@ Usage:
 
 HTTP API:
 
-`/`: list of containers being monitored (JSON array of container names)
-	GET: list of containers being monitored (JSON array of container names)
-	POST: takes 'id':'[id or name]', and begins to monitor it.
-`/{id or name}`:
-    GET: get configuration of container [404 if not monitored]
-    DELETE: do not monitor this container anymore
+* `GET /` list of containers being monitored (JSON array of container names)
+* `POST /` takes 'id':'[id or name]', and begins to monitor it
+* `GET /{id or name}` get configuration of container (404 if not monitored)
+* `DELETE /{id or name}` do not monitor this container anymore
 
 OS X Users:
 
